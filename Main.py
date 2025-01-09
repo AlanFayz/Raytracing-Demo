@@ -7,6 +7,7 @@ from OpenGL.GL.shaders import compileShader, compileProgram
 import numpy as np
 
 from Vector import *
+from ShaderCompiler import *
 
 class Sphere:
     def __init__(self, center: Vector, radius: float, colour: Vector, emission: float):
@@ -96,28 +97,11 @@ def DrawImage(rasterProgram, image):
 
 
 def Main():
-    shaderProgram = None
-    rasterProgram = None 
-
     pygame.init()
     screen = pygame.display.set_mode((800, 600), pygame.OPENGL | pygame.DOUBLEBUF | pygame.RESIZABLE)
 
-    with open("shader.glsl", "r") as file:
-        code = file.read()
-
-        computeShader = compileShader(code, GL_COMPUTE_SHADER)
-        shaderProgram = compileProgram(computeShader)
-
-    with open("fragment.glsl") as fragment:
-        fragmentCode = fragment.read()
-        fragmentShader = compileShader(fragmentCode, GL_FRAGMENT_SHADER)
-
-        with open("vertex.glsl") as vertex:
-            vertexCode = vertex.read()
-            vertexShader = compileShader(vertexCode, GL_VERTEX_SHADER)
-
-            rasterProgram = compileProgram(fragmentShader, vertexShader)
-    
+    shaderProgram = ShaderCompiler.Compile(("Shaders/Launch.glsl", GL_COMPUTE_SHADER))
+    rasterProgram = ShaderCompiler.Compile(("Shaders/Fragment.glsl", GL_FRAGMENT_SHADER), ("Shaders/Vertex.glsl", GL_VERTEX_SHADER)) 
     
     texture = CreateTexture(800, 600)  
     accumulation = CreateTexture(800, 600)

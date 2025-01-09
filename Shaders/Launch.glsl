@@ -9,32 +9,15 @@ uniform int ObjectCount;
 uniform int FrameIndex;
 uniform uint Seed;
 
-
 #define FLT_MAX 3.4028235e+38
 #define UINT_MAX 0xFFFFFFFF
-
-struct Sphere
-{
-    vec3 Center;
-    vec3 Color;
-    float Radius;
-    float Emission;
-};
-
-struct RayPayload
-{
-    vec3  Origin;
-    vec3  Direction;
-    vec3  Normal;
-    float Distance;
-    int   SphereIndex;
-    bool  Intersected;
-};
 
 layout(std430, binding = 0) buffer MyBuffer 
 {
     float data[];
 };
+
+#include "Ray.glsl"
 
 Sphere GetSphere(int index) 
 {
@@ -47,59 +30,6 @@ Sphere GetSphere(int index)
     sphere.Emission = data[realIndex + 7];
 
     return sphere;
-}
-
-RayPayload RaySphereTest(in RayPayload inPayload, int sphereIndex)
-{
-    Sphere sphere = GetSphere(sphereIndex);
-
-    RayPayload payload;
-
-    payload.Intersected = false;
-
-    vec3 oc = inPayload.Origin - sphere.Center;
-
-    float a = dot(inPayload.Direction, inPayload.Direction);
-    float b = 2 * dot(inPayload.Direction, oc);
-    float c = dot(oc, oc) - sphere.Radius * sphere.Radius;
-
-    float discriminant = (b * b) - (4 * a * c);
-
-    if (discriminant < 0)
-    {
-        return payload;
-    }
-
-    float root1 =  (-b + sqrt(discriminant)) / (2*a);
-    float root2  = (-b - sqrt(discriminant)) / (2*a);
-
-    if (root1 < 0 && root2 < 0)
-    {
-        return payload;
-    }
-
-    payload.Intersected = true;
-
-
-    if(root1 >= 0 && root2 >= 0)
-    {
-        payload.Distance = min(root1, root2);
-    }
-    else
-    {
-        payload.Distance = max(root1, root2);
-    } 
-
-    payload.SphereIndex = sphereIndex;
-
-    payload.Origin = inPayload.Origin;
-    payload.Direction = inPayload.Direction;
-
-    vec3 newOrigin = payload.Origin + payload.Direction * payload.Distance;
-    payload.Normal = newOrigin - sphere.Center;
-    payload.Normal = normalize(payload.Normal);
-
-    return payload;
 }
 
 uint PCGHash(uint seed)
@@ -158,7 +88,7 @@ void main()
     {
         for(int i = 0; i < ObjectCount; i++)
         {
-            RayPayload test = RaySphereTest(ray, i);
+            RayPayload test = RaySphereTest(ray, GetSphere(i), i);
 
             if(!test.Intersected)
             {
