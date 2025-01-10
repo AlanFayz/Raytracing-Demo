@@ -5,7 +5,6 @@ from OpenGL.GL.shaders import compileShader, compileProgram, ShaderProgram
 
 
 class ShaderCompiler:
-
     @staticmethod
     def Compile(*shaders: Tuple[str, int]) -> ShaderProgram:
         shaderIDs = [
@@ -27,17 +26,21 @@ class ShaderCompiler:
             with open(fileName, "r") as file:
                 code = file.read()
                 absolutePath = os.path.abspath(file.name)
+
         except FileNotFoundError:
-            if seenFiles:
-                parent = os.path.join(os.path.dirname(seenFiles[-1]), fileName)
-                try:
-                    with open(parent, "r") as file:
-                        code = file.read()
-                        absolutePath = os.path.abspath(file.name)
-                except FileNotFoundError:
-                    raise FileNotFoundError(f"file '{fileName}' could not be located.")
-            else:
+            if not seenFiles:
                 raise FileNotFoundError(f"file '{fileName}' could not be located.")
+            
+            parent = os.path.join(os.path.dirname(seenFiles[-1]), fileName)
+            
+            try:
+                with open(parent, "r") as file:
+                    code = file.read()
+                    absolutePath = os.path.abspath(file.name)
+
+            except FileNotFoundError:
+                raise FileNotFoundError(f"file '{fileName}' could not be located.")
+                
         
         if absolutePath in seenFiles:
             raise Error(f"recursive inclusion with file '{absolutePath}'")

@@ -64,7 +64,7 @@ class Vector:
         else:
             raise TypeError("other type should be vector")
 
-    def getData(self):
+    def GetData(self):
         return self.__data.flatten()
 
 def cross2(vector1: Vector, vector2: Vector) -> float:

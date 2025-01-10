@@ -18,6 +18,7 @@ layout(std430, binding = 0) buffer MyBuffer
 };
 
 #include "Ray.glsl"
+#include "Random.glsl"
 
 Sphere GetSphere(int index) 
 {
@@ -32,23 +33,6 @@ Sphere GetSphere(int index)
     return sphere;
 }
 
-uint PCGHash(uint seed)
-{
-	uint state = seed * 747796405u + 2891336453u;
-    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
-}
-
-float GenFloat(inout uint seed, float min, float max)
-{
-    seed = PCGHash(seed);
-    return min + ((float(seed) / float(UINT_MAX)) * (max-min));
-}
-
-vec3 RandomVector(inout uint seed)
-{
-    return vec3(GenFloat(seed, -1.0, 1.0), GenFloat(seed, -1.0, 1.0), GenFloat(seed, -1.0, 1.0));
-}
 
 void main() 
 {
@@ -59,20 +43,24 @@ void main()
         imageStore(Accumulation, id, vec4(0));  
     }
 
-    int bounceCount = 50;
+    int bounceCount = 3;
 
     vec3 coord  = vec3(id.x, id.y, 1.0);
     coord  /= vec3(imageSize(OutImage), 1.0);
 
-    vec3 skyColor = vec3(0.03, coord.y / 10, 0.03);
+    float col = 1.0 - coord.y;
+    col = min(col + 0.3, 1.0);
+    vec3 skyColor = vec3(col, col, col * 1.8);
+
     vec3 light = vec3(0.0, 0.0, 0.0);
     vec3 color = vec3(1.0, 1.0, 1.0);
 
     coord   = coord * 2 - 1;
     coord.z = -1.0;
 
-    float aspectRatio = imageSize(OutImage).x / imageSize(OutImage).y;
+    float aspectRatio = float(imageSize(OutImage).x) / float(imageSize(OutImage).y);
     coord.x *= aspectRatio;
+
 
     RayPayload ray;
 
@@ -83,12 +71,15 @@ void main()
     ray.Intersected = false;
 
     uint currentSeed = Seed;
+    bool calculateDiffuse = false;
 
     for(int bounce = 0; bounce < bounceCount; bounce++)
     {
         for(int i = 0; i < ObjectCount; i++)
         {
-            RayPayload test = RaySphereTest(ray, GetSphere(i), i);
+            Sphere sphere = GetSphere(i);
+
+            RayPayload test = RaySphereTest(ray, sphere, i);
 
             if(!test.Intersected)
             {
@@ -105,15 +96,17 @@ void main()
         {
             Sphere sphere = GetSphere(ray.SphereIndex);
 
+            light += sphere.Color * color * sphere.Emission;
             color *= sphere.Color;
-            light += sphere.Color * sphere.Emission;
 
             ray.Origin  = ray.Origin + ray.Direction * ray.Distance;
-            ray.Origin += ray.Normal * 0.001;
-
-            ray.Direction = normalize(RandomVector(currentSeed) + ray.Normal);
+            ray.Origin += ray.Normal * 0.0001;
+            ray.Direction = normalize(RandomHemisphereVector(ray.Normal, currentSeed));
+            
             ray.Intersected = false;
             ray.Distance = FLT_MAX;
+
+            calculateDiffuse = true;
 
             continue;
         }
@@ -121,11 +114,17 @@ void main()
         break;
     }
 
+    float cosTheta = 1.0; 
+    
+    if (calculateDiffuse)
+    {
+        cosTheta = max(dot(ray.Normal, ray.Direction), 0.0);
+    }
 
-    light += skyColor * color;
-
+    light += skyColor * color * cosTheta;
 
     vec4 newColor = imageLoad(Accumulation, id) + vec4(light, 1.0);
+    
     imageStore(Accumulation, id, newColor);  
     imageStore(OutImage, id, newColor / FrameIndex);  
 }
