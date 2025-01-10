@@ -26,6 +26,8 @@ class Application:
         self.accumulation = CreateTexture(width, height)
         self.objects = []
 
+        self.camera = Camera(90, width / height, 0.1, 100.0)
+
         if not save:
             self.objects.append(Sphere(glm.vec3(0, 0, -15), 3,      glm.vec3(1,1,1), 0.6))
             self.objects.append(Sphere(glm.vec3(-5, -3, -13), 2,    glm.vec3(240, 38, 38) / 255, 0.01))
@@ -33,29 +35,34 @@ class Application:
             self.objects.append(Sphere(glm.vec3(0, -1000, -5), 995, glm.vec3(60, 91, 98) / 255, 0.0))
 
             self.rawData = np.array([o.Data for o in self.objects], dtype=np.float32)
-            self.dataBuffer = CreateBuffer(self.rawData)
+            self.dataBuffer = GraphicsBuffer(self.rawData)
 
             return
 
-        with open(save, "r") as file:
-            data = yaml.safe_load(file)
+        try:
+            with open(save, "r") as file:
+                data = yaml.safe_load(file)
 
-            self.objects = [
-                Sphere(
-                    glm.vec3(obj["Properties"]["Center"]), 
-                    obj["Properties"]["Radius"], 
-                    glm.vec3(obj["Properties"]["Colour"]), 
-                    obj["Properties"]["Emission"]
-                ) 
-                for obj in data
-            ]
+                self.objects = [
+                    Sphere(
+                        glm.vec3(obj["Properties"]["Center"]), 
+                        obj["Properties"]["Radius"], 
+                        glm.vec3(obj["Properties"]["Colour"]), 
+                        obj["Properties"]["Emission"]
+                    ) 
+                    for obj in data
+                ]
+        except:
+            pass 
 
         self.rawData = np.array([o.Data for o in self.objects], dtype=np.float32)
-        self.dataBuffer = CreateBuffer(self.rawData)
+        self.dataBuffer = GraphicsBuffer(self.rawData)
+        
 
     def Run(self):
         running = True 
         frameIndex = 1
+        delta = 0
 
         while running:
             start = time.time()
@@ -71,7 +78,12 @@ class Application:
                     self.image = CreateTexture(self.window.get_width(), self.window.get_height())
                     self.accumulation = CreateTexture(self.window.get_width(), self.window.get_height())
 
+                    self.camera = Camera(90, self.window.get_width() / self.window.get_height(), 0.1, 100.0)
+
                     frameIndex = 1
+
+            if self.camera.Update(delta):
+                frameIndex = 1
 
             self.Compute(frameIndex)
             
@@ -79,25 +91,39 @@ class Application:
 
             pygame.display.flip()
             end = time.time()
-
-            print(f"frame took: {end - start}s")
-
+            
+            delta = end - start
             frameIndex += 1
 
     def Compute(self, frameIndex):
         glUseProgram(self.shaderProgram)
 
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, self.dataBuffer)
+        self.dataBuffer.BindUnit(0)
 
         glBindImageTexture(0, self.image, 0, False, 0, GL_READ_WRITE, GL_RGBA32F)
         glBindImageTexture(1, self.accumulation, 0, False, 0, GL_READ_WRITE, GL_RGBA32F)
 
+
         glUniform1i(glGetUniformLocation(self.shaderProgram, "OutImage"), 0)
         glUniform1i(glGetUniformLocation(self.shaderProgram, "Accumulation"), 1)
 
-        glUniform1i(glGetUniformLocation(self.shaderProgram, "ObjectCount"),  len(self.objects))
-        glUniform1i(glGetUniformLocation(self.shaderProgram, "FrameIndex"),  frameIndex)
-        glUniform1ui(glGetUniformLocation(self.shaderProgram, "Seed"),  random.randint(0, 10000000))
+        iView = self.camera.InverseView
+        iProjection = self.camera.InverseProjection
+
+        perFrameData = np.array([
+            *np.array(iView).flatten(),            
+            *np.array(iProjection).flatten(),      
+            self.camera.position.x, 
+            self.camera.position.y, 
+            self.camera.position.z,             
+            random.randint(0, 10000000),          
+            len(self.objects),                   
+            frameIndex                            
+        ], dtype=np.float32) 
+        
+        perFrameBuffer = GraphicsBuffer(perFrameData, bufferType=GL_UNIFORM_BUFFER)
+        perFrameBuffer.BindUnit(1)
+
 
 
         glDispatchCompute(math.ceil(self.window.get_width() / 16), math.ceil(self.window.get_height() / 16), 1)
@@ -106,7 +132,6 @@ class Application:
          
 
     def Shutdown(self):
-        DestroyBuffer(self.dataBuffer)
         DestroyTexture(self.image)
         DestroyTexture(self.accumulation)
 

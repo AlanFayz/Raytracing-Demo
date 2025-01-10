@@ -5,16 +5,29 @@ layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D OutImage;
 layout(rgba32f, binding = 1) uniform image2D Accumulation;
 
-uniform int ObjectCount;
-uniform int FrameIndex;
-uniform uint Seed;
+//uniform int ObjectCount;
+//uniform int FrameIndex;
+//uniform uint Seed;
+//uniform mat4 InverseView;
+//uniform mat4 InverseProjection;
+//uniform vec3 CameraPosition;
 
 #define FLT_MAX 3.4028235e+38
 #define UINT_MAX 0xFFFFFFFF
 
-layout(std430, binding = 0) buffer MyBuffer 
+layout(std430, binding = 0) buffer ObjectData 
 {
     float data[];
+};
+
+layout(binding = 1) uniform PerFrame
+{
+    mat4 InverseView;
+    mat4 InverseProjection;
+    vec3 CameraPosition;
+    float Seed;
+    float ObjectCount;
+    float FrameIndex;
 };
 
 #include "Ray.glsl"
@@ -43,6 +56,7 @@ void main()
         imageStore(Accumulation, id, vec4(0));  
     }
 
+
     int bounceCount = 3;
 
     vec3 coord  = vec3(id.x, id.y, 1.0);
@@ -58,24 +72,23 @@ void main()
     coord   = coord * 2 - 1;
     coord.z = -1.0;
 
-    float aspectRatio = float(imageSize(OutImage).x) / float(imageSize(OutImage).y);
-    coord.x *= aspectRatio;
-
+    vec4 target = InverseProjection * vec4(coord.x, coord.y, 1, 1);
+	vec3 rayDirection = vec3(InverseView * vec4(normalize(vec3(target) / target.w), 0)); 
 
     RayPayload ray;
 
-    ray.Origin = vec3(0, 0, 0);
-    ray.Direction = normalize(coord);
+    ray.Origin = CameraPosition;
+    ray.Direction = rayDirection;
     ray.Distance = FLT_MAX;
     ray.SphereIndex = -1;
     ray.Intersected = false;
 
-    uint currentSeed = Seed;
+    uint currentSeed = uint(Seed);
     bool calculateDiffuse = false;
 
     for(int bounce = 0; bounce < bounceCount; bounce++)
     {
-        for(int i = 0; i < ObjectCount; i++)
+        for(int i = 0; i < int(ObjectCount); i++)
         {
             Sphere sphere = GetSphere(i);
 

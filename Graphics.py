@@ -19,27 +19,33 @@ def CreateTexture(width, height):
 def DestroyTexture(textureID):
     glDeleteTextures(1, [textureID])
 
-def CreateBuffer(data=None, usage=GL_STATIC_DRAW):
-    if data is not None:
-        size = data.nbytes
-    else:
-        size = 0
-    
-    bufferID = glGenBuffers(1)
-    
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, bufferID)
-    
-    if data is not None:
-        glBufferData(GL_SHADER_STORAGE_BUFFER, size, data, usage)
-    else:
-        glBufferData(GL_SHADER_STORAGE_BUFFER, size, None, usage)
-    
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0)
 
-    return bufferID
 
-def DestroyBuffer(bufferID):
-    glDeleteBuffers(1, [bufferID])
+class GraphicsBuffer:
+    def __init__(self, data=None, usage=GL_STATIC_DRAW, bufferType=GL_SHADER_STORAGE_BUFFER):
+        if data is not None:
+            size = data.nbytes
+        else:
+            size = 0
+
+        self.bufferID = glGenBuffers(1)
+        self.type = bufferType
+
+        glBindBuffer(bufferType, self.bufferID)
+
+        if data is not None:
+            glBufferData(bufferType, size, data, usage)
+        else:
+            glBufferData(bufferType, size, None, usage)
+
+        glBindBuffer(bufferType, 0)
+    
+    def BindUnit(self, unit=0):
+        glBindBufferBase(self.type, unit, self.bufferID)
+    
+    def __del__(self):
+        glDeleteBuffers(1, [self.bufferID])
+
 
 def DrawImage(rasterProgram, image):
     vertices = np.array([

@@ -28,7 +28,7 @@ class ShaderCompiler:
                 absolutePath = os.path.abspath(file.name)
 
         except FileNotFoundError:
-            if not seenFiles:
+            if len(seenFiles) == 0:
                 raise FileNotFoundError(f"file '{fileName}' could not be located.")
             
             parent = os.path.join(os.path.dirname(seenFiles[-1]), fileName)
@@ -65,7 +65,7 @@ class ShaderCompiler:
             includedCode = ShaderCompiler.RecursiveShaderRead(newFileName, seenFiles[:])
 
             includeDirective = code[index:second + 1]  
-            code = code.replace(includeDirective, includedCode)
+            code = code.replace(includeDirective, includedCode, 1)
 
             index = code.find("#include", index + len(includedCode))
 
