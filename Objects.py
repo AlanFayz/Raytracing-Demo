@@ -145,6 +145,9 @@ class AABB:
 
     @property 
     def SurfaceArea(self):
+        if not self.Valid:
+            return 0
+
         diagonal = self.maxx - self.minn
         return 2 * (diagonal.x * diagonal.y + diagonal.x * diagonal.z + diagonal.y * diagonal.z)
     
