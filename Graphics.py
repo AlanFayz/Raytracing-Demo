@@ -20,7 +20,6 @@ def DestroyTexture(textureID):
     glDeleteTextures(1, [textureID])
 
 
-
 class GraphicsBuffer:
     def __init__(self, data=None, usage=GL_STATIC_DRAW, bufferType=GL_SHADER_STORAGE_BUFFER):
         if data is not None:

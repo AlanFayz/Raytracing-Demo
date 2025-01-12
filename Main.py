@@ -28,17 +28,6 @@ class Application:
 
         self.camera = Camera(90, width / height, 0.1, 100.0)
 
-        if not save:
-            self.objects.append(Sphere(glm.vec3(0, 0, -15), 3,      glm.vec3(1,1,1), 0.6))
-            self.objects.append(Sphere(glm.vec3(-5, -3, -13), 2,    glm.vec3(240, 38, 38) / 255, 0.01))
-            self.objects.append(Sphere(glm.vec3(6, -2, -13), 3,     glm.vec3(38, 136, 240) / 255, 0.0))
-            self.objects.append(Sphere(glm.vec3(0, -1000, -5), 995, glm.vec3(60, 91, 98) / 255, 0.0))
-
-            self.rawData = np.array([o.Data for o in self.objects], dtype=np.float32)
-            self.dataBuffer = GraphicsBuffer(self.rawData)
-
-            return
-
         try:
             with open(save, "r") as file:
                 data = yaml.safe_load(file)

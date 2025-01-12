@@ -5,13 +5,6 @@ layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D OutImage;
 layout(rgba32f, binding = 1) uniform image2D Accumulation;
 
-//uniform int ObjectCount;
-//uniform int FrameIndex;
-//uniform uint Seed;
-//uniform mat4 InverseView;
-//uniform mat4 InverseProjection;
-//uniform vec3 CameraPosition;
-
 #define FLT_MAX 3.4028235e+38
 #define UINT_MAX 0xFFFFFFFF
 
@@ -72,8 +65,10 @@ void main()
     coord   = coord * 2 - 1;
     coord.z = -1.0;
 
-    vec4 target = InverseProjection * vec4(coord.x, coord.y, 1, 1);
-	vec3 rayDirection = vec3(InverseView * vec4(normalize(vec3(target) / target.w), 0)); 
+    vec4 target = InverseProjection * vec4(coord.x, coord.y, 1.0, 1.0);
+    target.xyz /= target.w; 
+    
+    vec3 rayDirection = normalize((InverseView * vec4(target.xyz, 0.0)).xyz);
 
     RayPayload ray;
 
