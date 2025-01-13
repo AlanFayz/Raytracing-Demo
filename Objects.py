@@ -56,50 +56,10 @@ class AABB:
             return
         
         raise ValueError("wot")
-
-    
-    def Shrink(self, obj):
-        if isinstance(obj, AABB):
-            self.minn = glm.max(self.minn, obj.minn)
-            self.maxx = glm.min(self.maxx, obj.maxx)
-
-            return
-
-        if isinstance(obj, Sphere):
-            minn = obj.center - glm.vec3(obj.radius)
-            maxx = obj.center + glm.vec3(obj.radius)
-
-            self.Shrink(AABB(minn, maxx))
-
-            return
     
     def GrowFromObjects(self, objects, key=lambda x: x):
         for obj in objects:
             self.Grow(key(obj))
-
-    @staticmethod 
-    def CreateFromObjects(objects):
-        bounds = AABB()
-        bounds.GrowFromObjects(objects)
-        return bounds 
-    
-    def ParallelGrowFromObjects(self, objects, key=lambda x: x):
-        if len(objects) < 80_000:
-            self.GrowFromObjects(objects, key=key)
-            return 
-
-        chunkSize = len(objects) // os.cpu_count()
-        chunks = [objects[i:i+chunkSize] for i in range(0, len(objects), chunkSize)]
-        chunks = [[key(item) for item in chunk] for chunk in chunks]
-
-        with Pool() as pool:
-            bounds = pool.map(AABB.CreateFromObjects, chunks)
-            self.GrowFromObjects(bounds)
-
-    
-    def ShrinkFromObjects(self, objects, key=lambda x: x):
-        for obj in objects:
-            self.Shrink(key(obj))
 
     
     def Contains(self, instance) -> bool:

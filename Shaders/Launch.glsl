@@ -49,7 +49,6 @@ void main()
         imageStore(Accumulation, id, vec4(0));  
     }
 
-
     int bounceCount = 3;
 
     vec3 coord  = vec3(id.x, id.y, 1.0);

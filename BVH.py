@@ -1,9 +1,9 @@
-
+import heapq
+import sys
+from typing import Optional
 from collections import deque
-from os import utime
 import random
 import time
-from typing import Optional
 import glm
 import pygame
 
@@ -45,14 +45,58 @@ def CalculateSAHL(volumeA: AABB, volumeB: AABB, outerVolume: AABB,
 
     return traversalTime + costA + costB
 
-def CalculateSAHLowerBound(inheritedCost: float, outerBounds, primtive) -> float:
-    return inheritedCost + (primtive.bounds.SurfaceArea / outerBounds.SurfaceArea)
+def CalculateSAHLowerBound(inheritedCost: float, outerBounds, primtive, primitiveCount) -> float:
+    return inheritedCost + (primtive.bounds.SurfaceArea / outerBounds.SurfaceArea) * primitiveCount
+
+class Ray:
+    def __init__(self, origin, direction):
+        self.origin = origin
+        self.direction = glm.normalize(direction)
+        copy = glm.vec3(direction)
+        copy = [sys.float_info.epsilon if x == 0 else x for x in copy]
+        self.directionReciprocal = [1 / x for x in direction]
+
+def RayBoxIntersection(ray: Ray, box: AABB) -> float:
+    tminVec = (box.minn - ray.origin) * ray.directionReciprocal
+    tmaxVec = (box.maxx - ray.origin) * ray.directionReciprocal
+
+    tmin, tymin, tzmin = tminVec.x, tminVec.y, tminVec.z
+    tmax, tymax, tzmax = tmaxVec.x, tmaxVec.y, tmaxVec.z
+
+    if (tmin > tmax):
+        tmin, tmax = tmax, tmin
+  
+    if (tymin > tymax): 
+        tymin, tymax = tymax, tymin
+ 
+    if (tmin > tymax) or (tymin > tmax):
+        return -1.0
+ 
+    if (tymin > tmin): 
+        tmin = tymin
+
+    if (tymax < tmax): 
+        tmax = tymax 
+  
+    if (tzmin > tzmax):
+        tzmin, tzmax = tzmax, tzmin
+ 
+    if (tmin > tzmax) or (tzmin > tmax):
+        return -1.0 
+
+    if tmin < 0 and tmax < 0:
+        return -1.0
+
+    if tmin >= 0:
+        return tmin
+
+    return tmax
 
 class BVH:
     def __init__(self):
         self.nodes = [BVHNode(AABB())]
         self.objectData = []
-        self.threshold = 20
+        self.threshold = 3
     
     def Build(self, objects):
         self.nodes.clear()
@@ -78,7 +122,8 @@ class BVH:
     
         while queue:
             nodeIndex, inheritedCost = queue.popleft()            
-            cost = CalculateSAHLowerBound(inheritedCost, self.nodes[nodeIndex].boundingVolume, primitive)
+            cost = CalculateSAHLowerBound(inheritedCost, self.nodes[nodeIndex].boundingVolume, 
+                                          primitive, len(self.nodes[nodeIndex].leafNodes) + 1)
             
             if cost > bestCost:
                 continue
@@ -177,8 +222,6 @@ class BVH:
         if self._TryInsertPrimitives(currentNodeIndex, objects):            
             return 
 
-        # tuple(surface area heurstic, volumeA, volumeB)
-
         centroidBounds = AABB()
         centroidBounds.GrowFromObjects(objects, key=lambda x: x.centroid)
 
@@ -225,7 +268,78 @@ class BVH:
         if bestRightObjects:
             self.BuildSAH(self._GetRightNodeIndex(currentNodeIndex), bestRightObjects, bestBoundsB)
 
-    
+
+    # if hits will call function with hit function, else miss function
+    # ray object function should take in a ray and its object as its two arguments
+    # the result should be a tuple containing the minimum distance from the ray 
+    # to the object and the user data. if an object is hit the rayHitFunction 
+    # is called with user data. the ray miss function should take in the ray back
+    # the result of these functions (user choice) is returned
+
+    def TraceRay(self, ray: Ray, rayObjectFunction, rayHitFunction=None, rayMissFunction=None):
+        distance = RayBoxIntersection(ray, node[0].boundingVolume)
+
+        if distance < 0:
+            if rayMissFunction:
+                return rayMissFunction(ray)
+            
+            return None
+
+        heap = [(distance, 0)]
+
+        minimumDistance = float("inf")
+        userData = None
+
+        while heap:
+            distance, nodeIndex = heapq.heappop(heap)
+
+            newDistance, newUserData = self._TraceWithinBox(ray, rayObjectFunction, nodeIndex)
+
+            if newDistance < minimumDistance:
+                userData = newUserData
+                minimumDistance = newDistance
+                
+            if self._LeftChildExists(nodeIndex):
+                child = self._GetLeftNode(nodeIndex)
+
+                distance = RayBoxIntersection(ray, child.boundingVolume)
+
+                if distance >= 0:
+                    heapq.heappush(heap, (distance, self._GetLeftNodeIndex(nodeIndex)))
+            
+            if self._RightChildExists(nodeIndex):
+                child = self._GetRightNode(nodeIndex)
+                distance = RayBoxIntersection(ray, child.boundingVolume)
+
+                if distance >= 0:
+                    heapq.heappush(heap, (distance, self._GetRightNodeIndex(nodeIndex)))
+        
+        if minimumDistance == float("inf"):
+            if rayMissFunction:
+                return rayMissFunction(ray)
+        else:
+            if rayHitFunction:
+                return rayHitFunction(userData) 
+
+        return None
+
+    def _TraceWithinBox(self, ray: Ray, rayObjectFunction, nodeIndex: int):
+        node = self.nodes[nodeIndex]
+        minimumDistance  = float("inf")
+        userData = None
+
+        for leaf in node.leafNodes:
+            primitive = self.objectData[leaf]
+            
+            distance, result = rayObjectFunction(ray, primitive.object)
+
+            if distance < minimumDistance:
+                minimumDistance = distance
+                userData = result
+
+        return (minimumDistance, userData)
+
+
     def _GetLeftNodeIndex(self, nodeIndex: int) -> int:
         return 2 * nodeIndex + 1
     
@@ -287,11 +401,18 @@ class BVH:
     def _RightChildExists(self, nodeIndex) -> bool:
         return self._GetRightNodeIndex(nodeIndex) < len(self.nodes)
 
-def DrawAABB(box: AABB, screen):
-    pygame.draw.rect(screen, "#0000FF00", pygame.Rect(box.minn.x, box.minn.y, box.maxx.x - box.minn.x, box.maxx.y - box.minn.y), 2)
+
+def DrawAABB(box: AABB, screen, color):
+    pygame.draw.rect(screen, color, pygame.Rect(box.minn.x, box.minn.y, box.maxx.x - box.minn.x, box.maxx.y - box.minn.y), 2)
 
 def DrawCircle(circle: Sphere, screen):
     pygame.draw.circle(screen, "#FF000000", (circle.center.x, circle.center.y), circle.radius, 2)
+
+def DrawLine(start: glm.vec3, end: glm.vec3):
+    pygame.draw.line(screen, "#00FF0000", glm.vec2(start).to_list(), glm.vec2(end).to_list(), 2)
+
+def DrawRay(ray: Ray, length):
+    DrawLine(ray.origin, ray.origin + ray.direction * length)
 
 def RandomVector():
     return glm.vec3(random.randint(0, 1000), random.randint(0, 1000), random.randint(0, 1000))    
@@ -310,26 +431,7 @@ if __name__ == "__main__":
     clock = pygame.time.Clock()
 
     bvh = BVH()
-
-    start = time.time()
-
-    for _ in range(100_000):
-        bvh.Insert(Sphere(RandomVector(), 10, glm.vec3(0, 0, 0), 0.0))
-
-    end = time.time()   
-
-    print(f"time took {end - start}") 
-
-    objects = []
-
-    for _ in range(100_000):
-        objects.append(Sphere(RandomVector(), 10, glm.vec3(0, 0, 0), 0.0))
-
-    start = time.time()
-    bvh.Build(objects)
-    end = time.time()   
-
-    print(f"time took {end - start}") 
+    primitves = []
 
     i = 0
     while True:
@@ -341,16 +443,26 @@ if __name__ == "__main__":
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_w: 
                     mouse_x, mouse_y = pygame.mouse.get_pos()
+                    primitves.append(Sphere(glm.vec3(mouse_x, mouse_y, 0), 10, glm.vec3(0, 0, 0), 0.0))
+                    bvh.Build(primitves)
 
         screen.fill("#00000000")
+        
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        ray = Ray(glm.vec3(mouse_x, mouse_y, 0), glm.vec3(1, -1, 0.0001))
 
         for node in bvh.nodes:
-            DrawAABB(node.boundingVolume, screen)
+            if RayBoxIntersection(ray, node.boundingVolume):
+                DrawAABB(node.boundingVolume, screen, "#00FFFF00")
+            else:
+                DrawAABB(node.boundingVolume, screen, "#0000FF00")
 
             for leaf in node.leafNodes:
                 DrawCircle(bvh.objectData[leaf].object, screen)
+        
+        DrawRay(ray, 1000)
                 
-
         pygame.display.flip()
 
         clock.tick(60)
