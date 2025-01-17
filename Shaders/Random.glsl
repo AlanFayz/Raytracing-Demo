@@ -19,7 +19,7 @@ vec3 RandomVector(inout uint seed)
     return vec3(GenFloat(seed, -1.0, 1.0), GenFloat(seed, -1.0, 1.0), GenFloat(seed, -1.0, 1.0));
 }
 
-vec3 RandomHemisphereVector(vec3 normal, uint seed)
+vec3 RandomHemisphereVector(vec3 normal, inout uint seed)
 {
     vec3 randomVec = normalize(RandomVector(seed)); 
     return dot(randomVec, normal) > 0.0 ? randomVec : -randomVec; 

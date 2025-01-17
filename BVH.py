@@ -1,9 +1,9 @@
 import heapq
+import math
 import sys
 from typing import Optional
 from collections import deque
 import random
-import time
 import glm
 import pygame
 
@@ -52,9 +52,8 @@ class Ray:
     def __init__(self, origin, direction):
         self.origin = origin
         self.direction = glm.normalize(direction)
-        copy = glm.vec3(direction)
-        copy = [sys.float_info.epsilon if x == 0 else x for x in copy]
-        self.directionReciprocal = [1 / x for x in direction]
+        copy = [sys.float_info.epsilon if x == 0 else x for x in self.direction]
+        self.directionReciprocal = [1 / x for x in copy]
 
 def RayBoxIntersection(ray: Ray, box: AABB) -> float:
     tminVec = (box.minn - ray.origin) * ray.directionReciprocal
@@ -91,6 +90,30 @@ def RayBoxIntersection(ray: Ray, box: AABB) -> float:
         return tmin
 
     return tmax
+
+def RaySphereIntersection(ray: Ray, sphere: Sphere):
+    oc = ray.origin - sphere.center
+
+    a = glm.dot(ray.direction, ray.direction)
+    b = 2 * glm.dot(ray.direction, oc)
+    c = glm.dot(oc, oc) - sphere.radius ** 2
+
+    discriminant = (b * b) - (4 * a * c)
+
+    if discriminant < 0:
+        return (-1, None)
+
+    root1 = (-b + math.sqrt(discriminant)) / (2 * a)
+    root2 = (-b - math.sqrt(discriminant)) / (2 * a)
+
+    if root1 < 0 and root2 < 0:
+        return (-1, None)
+
+    if root1 >= 0 and root2 >= 0:
+        return (min(root1, root2), sphere.index)
+    else:
+        return (max(root1, root2), sphere.index)
+
 
 class BVH:
     def __init__(self):
@@ -273,11 +296,11 @@ class BVH:
     # ray object function should take in a ray and its object as its two arguments
     # the result should be a tuple containing the minimum distance from the ray 
     # to the object and the user data. if an object is hit the rayHitFunction 
-    # is called with user data. the ray miss function should take in the ray back
+    # is called with user data. the ray miss function should take in the ray back.
     # the result of these functions (user choice) is returned
 
     def TraceRay(self, ray: Ray, rayObjectFunction, rayHitFunction=None, rayMissFunction=None):
-        distance = RayBoxIntersection(ray, node[0].boundingVolume)
+        distance = RayBoxIntersection(ray, self.nodes[0].boundingVolume)
 
         if distance < 0:
             if rayMissFunction:
@@ -322,7 +345,6 @@ class BVH:
                 return rayHitFunction(userData) 
 
         return None
-
     def _TraceWithinBox(self, ray: Ray, rayObjectFunction, nodeIndex: int):
         node = self.nodes[nodeIndex]
         minimumDistance  = float("inf")
@@ -333,7 +355,7 @@ class BVH:
             
             distance, result = rayObjectFunction(ray, primitive.object)
 
-            if distance < minimumDistance:
+            if distance < minimumDistance and distance >= 0:
                 minimumDistance = distance
                 userData = result
 
@@ -405,8 +427,8 @@ class BVH:
 def DrawAABB(box: AABB, screen, color):
     pygame.draw.rect(screen, color, pygame.Rect(box.minn.x, box.minn.y, box.maxx.x - box.minn.x, box.maxx.y - box.minn.y), 2)
 
-def DrawCircle(circle: Sphere, screen):
-    pygame.draw.circle(screen, "#FF000000", (circle.center.x, circle.center.y), circle.radius, 2)
+def DrawCircle(circle: Sphere, screen, color="#FF000000"):
+    pygame.draw.circle(screen, color, (circle.center.x, circle.center.y), circle.radius, 2)
 
 def DrawLine(start: glm.vec3, end: glm.vec3):
     pygame.draw.line(screen, "#00FF0000", glm.vec2(start).to_list(), glm.vec2(end).to_list(), 2)
@@ -416,6 +438,7 @@ def DrawRay(ray: Ray, length):
 
 def RandomVector():
     return glm.vec3(random.randint(0, 1000), random.randint(0, 1000), random.randint(0, 1000))    
+
 
 
 if __name__ == "__main__":
@@ -431,7 +454,7 @@ if __name__ == "__main__":
     clock = pygame.time.Clock()
 
     bvh = BVH()
-    primitves = []
+    primitives = []
 
     i = 0
     while True:
@@ -443,23 +466,28 @@ if __name__ == "__main__":
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_w: 
                     mouse_x, mouse_y = pygame.mouse.get_pos()
-                    primitves.append(Sphere(glm.vec3(mouse_x, mouse_y, 0), 10, glm.vec3(0, 0, 0), 0.0))
-                    bvh.Build(primitves)
+                    primitives.append(Sphere(glm.vec3(mouse_x, mouse_y, 0), 10, glm.vec3(0, 0, 0), 0.0))
+                    primitives[-1].index = len(primitives) - 1
+                    bvh.Build(primitives)
 
         screen.fill("#00000000")
         
         mouse_x, mouse_y = pygame.mouse.get_pos()
 
-        ray = Ray(glm.vec3(mouse_x, mouse_y, 0), glm.vec3(1, -1, 0.0001))
+        ray = Ray(glm.vec3(mouse_x, mouse_y, 0), glm.vec3(1, -1, 0))
 
         for node in bvh.nodes:
-            if RayBoxIntersection(ray, node.boundingVolume):
-                DrawAABB(node.boundingVolume, screen, "#00FFFF00")
-            else:
-                DrawAABB(node.boundingVolume, screen, "#0000FF00")
+            DrawAABB(node.boundingVolume, screen, "#0000FF00")
 
             for leaf in node.leafNodes:
                 DrawCircle(bvh.objectData[leaf].object, screen)
+        
+        def RayHitFunction(userData):
+            DrawCircle(bvh.objectData[userData].object, screen, "#FFFF0000")
+            return None
+
+
+        bvh.TraceRay(ray, RaySphereIntersection, rayHitFunction=RayHitFunction)
         
         DrawRay(ray, 1000)
                 

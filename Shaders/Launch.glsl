@@ -1,9 +1,10 @@
-#version 450
+#version 450 core
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D OutImage;
 layout(rgba32f, binding = 1) uniform image2D Accumulation;
+layout(r32ui, binding = 2) uniform uimage2D Seeds;
 
 #define FLT_MAX 3.4028235e+38
 #define UINT_MAX 0xFFFFFFFF
@@ -77,7 +78,8 @@ void main()
     ray.SphereIndex = -1;
     ray.Intersected = false;
 
-    uint currentSeed = uint(Seed);
+    uvec4 loadedSeed = imageLoad(Seeds, id);
+    uint currentSeed = loadedSeed.x;
     bool calculateDiffuse = false;
 
     for(int bounce = 0; bounce < bounceCount; bounce++)
@@ -133,5 +135,6 @@ void main()
     vec4 newColor = imageLoad(Accumulation, id) + vec4(light, 1.0);
     
     imageStore(Accumulation, id, newColor);  
+    imageStore(Seeds, id, uvec4(currentSeed));
     imageStore(OutImage, id, newColor / FrameIndex);  
 }

@@ -24,6 +24,9 @@ class Application:
 
         self.image = CreateTexture(width, height)
         self.accumulation = CreateTexture(width, height)
+
+        data = np.random.randint(0, np.iinfo(np.uint32).max, (width, height, 1), dtype=np.uint32)
+        self.randomNumbers = CreateTexture(width, height, data, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT)
         self.objects = []
 
         self.camera = Camera(90, width / height, 0.1, 100.0)
@@ -91,10 +94,11 @@ class Application:
 
         glBindImageTexture(0, self.image, 0, False, 0, GL_READ_WRITE, GL_RGBA32F)
         glBindImageTexture(1, self.accumulation, 0, False, 0, GL_READ_WRITE, GL_RGBA32F)
-
+        glBindImageTexture(2, self.randomNumbers, 0, False, 0, GL_READ_WRITE, GL_R32UI)
 
         glUniform1i(glGetUniformLocation(self.shaderProgram, "OutImage"), 0)
         glUniform1i(glGetUniformLocation(self.shaderProgram, "Accumulation"), 1)
+        glUniform1i(glGetUniformLocation(self.shaderProgram, "Seeds"), 2)
 
         iView = self.camera.InverseView
         iProjection = self.camera.InverseProjection
@@ -123,6 +127,7 @@ class Application:
     def Shutdown(self):
         DestroyTexture(self.image)
         DestroyTexture(self.accumulation)
+        DestroyTexture(self.randomNumbers)
 
         with open(self.save, "w") as file:
             l = [ 

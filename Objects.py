@@ -11,6 +11,7 @@ class Sphere:
         self.colour = colour
         self.radius = radius
         self.emission = emission
+        self.index = 0
     
     @property
     def Volume(self):

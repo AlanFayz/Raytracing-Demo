@@ -2,11 +2,11 @@ from OpenGL.GL import *
 
 import numpy as np
 
-def CreateTexture(width, height):
+def CreateTexture(width, height, data=None, formatType=GL_RGBA32F, fmt=GL_RGBA, dtype=GL_FLOAT):
     textureID = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, textureID)
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, None)
+    glTexImage2D(GL_TEXTURE_2D, 0, formatType, width, height, 0, fmt, dtype, data)
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
